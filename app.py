@@ -1,68 +1,297 @@
-from fastapi import FastAPI, UploadFile, File, Form, Request
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.llms import Ollama
-from langchain_community.document_loaders import PyPDFLoader
-
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chains import RetrievalQA
-from langchain.embeddings import HuggingFaceEmbeddings
-
-
-import os
-import tempfile
-
-app = FastAPI()
-templates = Jinja2Templates(directory="templates")
-#app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# In-memory vector store
-vector_store = None
-
-@app.get("/", response_class=HTMLResponse)
-async def serve_home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
-
-
-@app.post("/upload/")
-async def upload_document(file: UploadFile = File(...)):
-    global vector_store
-
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    with open(temp_file.name, "wb") as f:
-        content = await file.read()
-        f.write(content)
-
-    loader = PyPDFLoader(temp_file.name)
-    documents = loader.load()
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    docs = splitter.split_documents(documents)
-
-    #embeddings = OllamaEmbeddings(model="nomic-embed-text")  # Or "llama3" if supported
-    #embeddings = OllamaEmbeddings(model="llama3")
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vector_store = FAISS.from_documents(docs, embeddings)
-
-    return {"message": "Document uploaded and indexed successfully."}
-
-
-@app.post("/chat/")
-async def chat_with_doc(query: str = Form(...)):
-    global vector_store
-    if vector_store is None:
-        return {"error": "Please upload a document first."}
-
-    retriever = vector_store.as_retriever()
-    qa_chain = RetrievalQA.from_chain_type(
-        #llm=Ollama(model="llama3"),
-        llm = Ollama(model="mistral"),
-        retriever=retriever,
-        return_source_documents=False,
-    )
-    result = qa_chain.run(query)
-    return {"response": result}
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyM00H0DFfsuiI4YtXPOnT90",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/hari-venugopal/rag-chat-system/blob/main/app.py\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from fastapi import FastAPI, UploadFile, File, Form, Request\n",
+        "from fastapi.responses import HTMLResponse\n",
+        "from fastapi.staticfiles import StaticFiles\n",
+        "from fastapi.templating import Jinja2Templates\n",
+        "\n",
+        "from langchain_community.vectorstores import FAISS\n",
+        "from langchain_community.embeddings import OllamaEmbeddings\n",
+        "from langchain_community.llms import Ollama\n",
+        "from langchain_community.document_loaders import PyPDFLoader\n",
+        "\n",
+        "from langchain.text_splitter import RecursiveCharacterTextSplitter\n",
+        "from langchain.chains import RetrievalQA\n",
+        "from langchain.embeddings import HuggingFaceEmbeddings\n",
+        "\n",
+        "\n",
+        "import os\n",
+        "import tempfile\n",
+        "\n",
+        "app = FastAPI()\n",
+        "templates = Jinja2Templates(directory=\"templates\")\n",
+        "#app.mount(\"/static\", StaticFiles(directory=\"static\"), name=\"static\")\n",
+        "\n",
+        "# In-memory vector store\n",
+        "vector_store = None\n",
+        "\n",
+        "@app.get(\"/\", response_class=HTMLResponse)\n",
+        "async def serve_home(request: Request):\n",
+        "    return templates.TemplateResponse(\"index.html\", {\"request\": request})\n",
+        "\n",
+        "\n",
+        "@app.post(\"/upload/\")\n",
+        "async def upload_document(file: UploadFile = File(...)):\n",
+        "    global vector_store\n",
+        "\n",
+        "    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=\".pdf\")\n",
+        "    with open(temp_file.name, \"wb\") as f:\n",
+        "        content = await file.read()\n",
+        "        f.write(content)\n",
+        "\n",
+        "    loader = PyPDFLoader(temp_file.name)\n",
+        "    documents = loader.load()\n",
+        "\n",
+        "    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)\n",
+        "    docs = splitter.split_documents(documents)\n",
+        "\n",
+        "    #embeddings = OllamaEmbeddings(model=\"nomic-embed-text\")  # Or \"llama3\" if supported\n",
+        "    #embeddings = OllamaEmbeddings(model=\"llama3\")\n",
+        "    embeddings = HuggingFaceEmbeddings(model_name=\"all-MiniLM-L6-v2\")\n",
+        "    vector_store = FAISS.from_documents(docs, embeddings)\n",
+        "\n",
+        "    return {\"message\": \"Document uploaded and indexed successfully.\"}\n",
+        "\n",
+        "\n",
+        "@app.post(\"/chat/\")\n",
+        "async def chat_with_doc(query: str = Form(...)):\n",
+        "    global vector_store\n",
+        "    if vector_store is None:\n",
+        "        return {\"error\": \"Please upload a document first.\"}\n",
+        "\n",
+        "    retriever = vector_store.as_retriever()\n",
+        "    qa_chain = RetrievalQA.from_chain_type(\n",
+        "        #llm=Ollama(model=\"llama3\"),\n",
+        "        llm = Ollama(model=\"mistral\"),\n",
+        "        retriever=retriever,\n",
+        "        return_source_documents=False,\n",
+        "    )\n",
+        "    result = qa_chain.run(query)\n",
+        "    return {\"response\": result}\n"
+      ],
+      "metadata": {
+        "id": "z_HxLUvy0u18"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!pip install fastapi\n",
+        "!pip install uvicorn\n",
+        "!pip install langchain\n",
+        "!pip install langchain-community\n",
+        "!pip install faiss-cpu\n",
+        "!pip install pypdf\n",
+        "!pip install python-multipart\n",
+        "!pip install jinja2\n",
+        "!pip install faiss-cpu\n",
+        "!pip install pypdf\n",
+        "!pip install python-multipart\n",
+        "!pip install jinja2\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "DXuujeBv0yr8",
+        "outputId": "275dd014-b9b6-421c-bb29-6bc083c6bd92"
+      },
+      "execution_count": 5,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: fastapi in /usr/local/lib/python3.11/dist-packages (0.115.12)\n",
+            "Requirement already satisfied: starlette<0.47.0,>=0.40.0 in /usr/local/lib/python3.11/dist-packages (from fastapi) (0.46.2)\n",
+            "Requirement already satisfied: pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4 in /usr/local/lib/python3.11/dist-packages (from fastapi) (2.11.3)\n",
+            "Requirement already satisfied: typing-extensions>=4.8.0 in /usr/local/lib/python3.11/dist-packages (from fastapi) (4.13.2)\n",
+            "Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.11/dist-packages (from pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4->fastapi) (0.7.0)\n",
+            "Requirement already satisfied: pydantic-core==2.33.1 in /usr/local/lib/python3.11/dist-packages (from pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4->fastapi) (2.33.1)\n",
+            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4->fastapi) (0.4.0)\n",
+            "Requirement already satisfied: anyio<5,>=3.6.2 in /usr/local/lib/python3.11/dist-packages (from starlette<0.47.0,>=0.40.0->fastapi) (4.9.0)\n",
+            "Requirement already satisfied: idna>=2.8 in /usr/local/lib/python3.11/dist-packages (from anyio<5,>=3.6.2->starlette<0.47.0,>=0.40.0->fastapi) (3.10)\n",
+            "Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.11/dist-packages (from anyio<5,>=3.6.2->starlette<0.47.0,>=0.40.0->fastapi) (1.3.1)\n",
+            "Collecting uvicorn\n",
+            "  Downloading uvicorn-0.34.2-py3-none-any.whl.metadata (6.5 kB)\n",
+            "Requirement already satisfied: click>=7.0 in /usr/local/lib/python3.11/dist-packages (from uvicorn) (8.1.8)\n",
+            "Requirement already satisfied: h11>=0.8 in /usr/local/lib/python3.11/dist-packages (from uvicorn) (0.14.0)\n",
+            "Downloading uvicorn-0.34.2-py3-none-any.whl (62 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m62.5/62.5 kB\u001b[0m \u001b[31m1.6 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hInstalling collected packages: uvicorn\n",
+            "Successfully installed uvicorn-0.34.2\n",
+            "Requirement already satisfied: langchain in /usr/local/lib/python3.11/dist-packages (0.3.23)\n",
+            "Requirement already satisfied: langchain-core<1.0.0,>=0.3.51 in /usr/local/lib/python3.11/dist-packages (from langchain) (0.3.52)\n",
+            "Requirement already satisfied: langchain-text-splitters<1.0.0,>=0.3.8 in /usr/local/lib/python3.11/dist-packages (from langchain) (0.3.8)\n",
+            "Requirement already satisfied: langsmith<0.4,>=0.1.17 in /usr/local/lib/python3.11/dist-packages (from langchain) (0.3.31)\n",
+            "Requirement already satisfied: pydantic<3.0.0,>=2.7.4 in /usr/local/lib/python3.11/dist-packages (from langchain) (2.11.3)\n",
+            "Requirement already satisfied: SQLAlchemy<3,>=1.4 in /usr/local/lib/python3.11/dist-packages (from langchain) (2.0.40)\n",
+            "Requirement already satisfied: requests<3,>=2 in /usr/local/lib/python3.11/dist-packages (from langchain) (2.32.3)\n",
+            "Requirement already satisfied: PyYAML>=5.3 in /usr/local/lib/python3.11/dist-packages (from langchain) (6.0.2)\n",
+            "Requirement already satisfied: tenacity!=8.4.0,<10.0.0,>=8.1.0 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.51->langchain) (9.1.2)\n",
+            "Requirement already satisfied: jsonpatch<2.0,>=1.33 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.51->langchain) (1.33)\n",
+            "Requirement already satisfied: packaging<25,>=23.2 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.51->langchain) (24.2)\n",
+            "Requirement already satisfied: typing-extensions>=4.7 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.51->langchain) (4.13.2)\n",
+            "Requirement already satisfied: httpx<1,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith<0.4,>=0.1.17->langchain) (0.28.1)\n",
+            "Requirement already satisfied: orjson<4.0.0,>=3.9.14 in /usr/local/lib/python3.11/dist-packages (from langsmith<0.4,>=0.1.17->langchain) (3.10.16)\n",
+            "Requirement already satisfied: requests-toolbelt<2.0.0,>=1.0.0 in /usr/local/lib/python3.11/dist-packages (from langsmith<0.4,>=0.1.17->langchain) (1.0.0)\n",
+            "Requirement already satisfied: zstandard<0.24.0,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith<0.4,>=0.1.17->langchain) (0.23.0)\n",
+            "Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3.0.0,>=2.7.4->langchain) (0.7.0)\n",
+            "Requirement already satisfied: pydantic-core==2.33.1 in /usr/local/lib/python3.11/dist-packages (from pydantic<3.0.0,>=2.7.4->langchain) (2.33.1)\n",
+            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3.0.0,>=2.7.4->langchain) (0.4.0)\n",
+            "Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain) (3.4.1)\n",
+            "Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain) (3.10)\n",
+            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain) (2.3.0)\n",
+            "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain) (2025.1.31)\n",
+            "Requirement already satisfied: greenlet>=1 in /usr/local/lib/python3.11/dist-packages (from SQLAlchemy<3,>=1.4->langchain) (3.2.0)\n",
+            "Requirement already satisfied: anyio in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith<0.4,>=0.1.17->langchain) (4.9.0)\n",
+            "Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith<0.4,>=0.1.17->langchain) (1.0.8)\n",
+            "Requirement already satisfied: h11<0.15,>=0.13 in /usr/local/lib/python3.11/dist-packages (from httpcore==1.*->httpx<1,>=0.23.0->langsmith<0.4,>=0.1.17->langchain) (0.14.0)\n",
+            "Requirement already satisfied: jsonpointer>=1.9 in /usr/local/lib/python3.11/dist-packages (from jsonpatch<2.0,>=1.33->langchain-core<1.0.0,>=0.3.51->langchain) (3.0.0)\n",
+            "Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.11/dist-packages (from anyio->httpx<1,>=0.23.0->langsmith<0.4,>=0.1.17->langchain) (1.3.1)\n",
+            "Collecting langchain-community\n",
+            "  Downloading langchain_community-0.3.22-py3-none-any.whl.metadata (2.4 kB)\n",
+            "Collecting langchain-core<1.0.0,>=0.3.55 (from langchain-community)\n",
+            "  Downloading langchain_core-0.3.55-py3-none-any.whl.metadata (5.9 kB)\n",
+            "Collecting langchain<1.0.0,>=0.3.24 (from langchain-community)\n",
+            "  Downloading langchain-0.3.24-py3-none-any.whl.metadata (7.8 kB)\n",
+            "Requirement already satisfied: SQLAlchemy<3,>=1.4 in /usr/local/lib/python3.11/dist-packages (from langchain-community) (2.0.40)\n",
+            "Requirement already satisfied: requests<3,>=2 in /usr/local/lib/python3.11/dist-packages (from langchain-community) (2.32.3)\n",
+            "Requirement already satisfied: PyYAML>=5.3 in /usr/local/lib/python3.11/dist-packages (from langchain-community) (6.0.2)\n",
+            "Requirement already satisfied: aiohttp<4.0.0,>=3.8.3 in /usr/local/lib/python3.11/dist-packages (from langchain-community) (3.11.15)\n",
+            "Requirement already satisfied: tenacity!=8.4.0,<10,>=8.1.0 in /usr/local/lib/python3.11/dist-packages (from langchain-community) (9.1.2)\n",
+            "Collecting dataclasses-json<0.7,>=0.5.7 (from langchain-community)\n",
+            "  Downloading dataclasses_json-0.6.7-py3-none-any.whl.metadata (25 kB)\n",
+            "Collecting pydantic-settings<3.0.0,>=2.4.0 (from langchain-community)\n",
+            "  Downloading pydantic_settings-2.9.1-py3-none-any.whl.metadata (3.8 kB)\n",
+            "Requirement already satisfied: langsmith<0.4,>=0.1.125 in /usr/local/lib/python3.11/dist-packages (from langchain-community) (0.3.31)\n",
+            "Collecting httpx-sse<1.0.0,>=0.4.0 (from langchain-community)\n",
+            "  Downloading httpx_sse-0.4.0-py3-none-any.whl.metadata (9.0 kB)\n",
+            "Requirement already satisfied: numpy>=1.26.2 in /usr/local/lib/python3.11/dist-packages (from langchain-community) (2.0.2)\n",
+            "Requirement already satisfied: aiohappyeyeballs>=2.3.0 in /usr/local/lib/python3.11/dist-packages (from aiohttp<4.0.0,>=3.8.3->langchain-community) (2.6.1)\n",
+            "Requirement already satisfied: aiosignal>=1.1.2 in /usr/local/lib/python3.11/dist-packages (from aiohttp<4.0.0,>=3.8.3->langchain-community) (1.3.2)\n",
+            "Requirement already satisfied: attrs>=17.3.0 in /usr/local/lib/python3.11/dist-packages (from aiohttp<4.0.0,>=3.8.3->langchain-community) (25.3.0)\n",
+            "Requirement already satisfied: frozenlist>=1.1.1 in /usr/local/lib/python3.11/dist-packages (from aiohttp<4.0.0,>=3.8.3->langchain-community) (1.5.0)\n",
+            "Requirement already satisfied: multidict<7.0,>=4.5 in /usr/local/lib/python3.11/dist-packages (from aiohttp<4.0.0,>=3.8.3->langchain-community) (6.4.3)\n",
+            "Requirement already satisfied: propcache>=0.2.0 in /usr/local/lib/python3.11/dist-packages (from aiohttp<4.0.0,>=3.8.3->langchain-community) (0.3.1)\n",
+            "Requirement already satisfied: yarl<2.0,>=1.17.0 in /usr/local/lib/python3.11/dist-packages (from aiohttp<4.0.0,>=3.8.3->langchain-community) (1.19.0)\n",
+            "Collecting marshmallow<4.0.0,>=3.18.0 (from dataclasses-json<0.7,>=0.5.7->langchain-community)\n",
+            "  Downloading marshmallow-3.26.1-py3-none-any.whl.metadata (7.3 kB)\n",
+            "Collecting typing-inspect<1,>=0.4.0 (from dataclasses-json<0.7,>=0.5.7->langchain-community)\n",
+            "  Downloading typing_inspect-0.9.0-py3-none-any.whl.metadata (1.5 kB)\n",
+            "Requirement already satisfied: langchain-text-splitters<1.0.0,>=0.3.8 in /usr/local/lib/python3.11/dist-packages (from langchain<1.0.0,>=0.3.24->langchain-community) (0.3.8)\n",
+            "Requirement already satisfied: pydantic<3.0.0,>=2.7.4 in /usr/local/lib/python3.11/dist-packages (from langchain<1.0.0,>=0.3.24->langchain-community) (2.11.3)\n",
+            "Requirement already satisfied: jsonpatch<2.0,>=1.33 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.55->langchain-community) (1.33)\n",
+            "Requirement already satisfied: packaging<25,>=23.2 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.55->langchain-community) (24.2)\n",
+            "Requirement already satisfied: typing-extensions>=4.7 in /usr/local/lib/python3.11/dist-packages (from langchain-core<1.0.0,>=0.3.55->langchain-community) (4.13.2)\n",
+            "Requirement already satisfied: httpx<1,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith<0.4,>=0.1.125->langchain-community) (0.28.1)\n",
+            "Requirement already satisfied: orjson<4.0.0,>=3.9.14 in /usr/local/lib/python3.11/dist-packages (from langsmith<0.4,>=0.1.125->langchain-community) (3.10.16)\n",
+            "Requirement already satisfied: requests-toolbelt<2.0.0,>=1.0.0 in /usr/local/lib/python3.11/dist-packages (from langsmith<0.4,>=0.1.125->langchain-community) (1.0.0)\n",
+            "Requirement already satisfied: zstandard<0.24.0,>=0.23.0 in /usr/local/lib/python3.11/dist-packages (from langsmith<0.4,>=0.1.125->langchain-community) (0.23.0)\n",
+            "Collecting python-dotenv>=0.21.0 (from pydantic-settings<3.0.0,>=2.4.0->langchain-community)\n",
+            "  Downloading python_dotenv-1.1.0-py3-none-any.whl.metadata (24 kB)\n",
+            "Requirement already satisfied: typing-inspection>=0.4.0 in /usr/local/lib/python3.11/dist-packages (from pydantic-settings<3.0.0,>=2.4.0->langchain-community) (0.4.0)\n",
+            "Requirement already satisfied: charset-normalizer<4,>=2 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain-community) (3.4.1)\n",
+            "Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain-community) (3.10)\n",
+            "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain-community) (2.3.0)\n",
+            "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.11/dist-packages (from requests<3,>=2->langchain-community) (2025.1.31)\n",
+            "Requirement already satisfied: greenlet>=1 in /usr/local/lib/python3.11/dist-packages (from SQLAlchemy<3,>=1.4->langchain-community) (3.2.0)\n",
+            "Requirement already satisfied: anyio in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith<0.4,>=0.1.125->langchain-community) (4.9.0)\n",
+            "Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.11/dist-packages (from httpx<1,>=0.23.0->langsmith<0.4,>=0.1.125->langchain-community) (1.0.8)\n",
+            "Requirement already satisfied: h11<0.15,>=0.13 in /usr/local/lib/python3.11/dist-packages (from httpcore==1.*->httpx<1,>=0.23.0->langsmith<0.4,>=0.1.125->langchain-community) (0.14.0)\n",
+            "Requirement already satisfied: jsonpointer>=1.9 in /usr/local/lib/python3.11/dist-packages (from jsonpatch<2.0,>=1.33->langchain-core<1.0.0,>=0.3.55->langchain-community) (3.0.0)\n",
+            "Requirement already satisfied: annotated-types>=0.6.0 in /usr/local/lib/python3.11/dist-packages (from pydantic<3.0.0,>=2.7.4->langchain<1.0.0,>=0.3.24->langchain-community) (0.7.0)\n",
+            "Requirement already satisfied: pydantic-core==2.33.1 in /usr/local/lib/python3.11/dist-packages (from pydantic<3.0.0,>=2.7.4->langchain<1.0.0,>=0.3.24->langchain-community) (2.33.1)\n",
+            "Collecting mypy-extensions>=0.3.0 (from typing-inspect<1,>=0.4.0->dataclasses-json<0.7,>=0.5.7->langchain-community)\n",
+            "  Downloading mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)\n",
+            "Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.11/dist-packages (from anyio->httpx<1,>=0.23.0->langsmith<0.4,>=0.1.125->langchain-community) (1.3.1)\n",
+            "Downloading langchain_community-0.3.22-py3-none-any.whl (2.5 MB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m2.5/2.5 MB\u001b[0m \u001b[31m30.8 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hDownloading dataclasses_json-0.6.7-py3-none-any.whl (28 kB)\n",
+            "Downloading httpx_sse-0.4.0-py3-none-any.whl (7.8 kB)\n",
+            "Downloading langchain-0.3.24-py3-none-any.whl (1.0 MB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m1.0/1.0 MB\u001b[0m \u001b[31m55.1 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hDownloading langchain_core-0.3.55-py3-none-any.whl (434 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m434.1/434.1 kB\u001b[0m \u001b[31m30.9 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hDownloading pydantic_settings-2.9.1-py3-none-any.whl (44 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m44.4/44.4 kB\u001b[0m \u001b[31m3.3 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hDownloading marshmallow-3.26.1-py3-none-any.whl (50 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m50.9/50.9 kB\u001b[0m \u001b[31m4.3 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hDownloading python_dotenv-1.1.0-py3-none-any.whl (20 kB)\n",
+            "Downloading typing_inspect-0.9.0-py3-none-any.whl (8.8 kB)\n",
+            "Downloading mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)\n",
+            "Installing collected packages: python-dotenv, mypy-extensions, marshmallow, httpx-sse, typing-inspect, pydantic-settings, dataclasses-json, langchain-core, langchain, langchain-community\n",
+            "  Attempting uninstall: langchain-core\n",
+            "    Found existing installation: langchain-core 0.3.52\n",
+            "    Uninstalling langchain-core-0.3.52:\n",
+            "      Successfully uninstalled langchain-core-0.3.52\n",
+            "  Attempting uninstall: langchain\n",
+            "    Found existing installation: langchain 0.3.23\n",
+            "    Uninstalling langchain-0.3.23:\n",
+            "      Successfully uninstalled langchain-0.3.23\n",
+            "Successfully installed dataclasses-json-0.6.7 httpx-sse-0.4.0 langchain-0.3.24 langchain-community-0.3.22 langchain-core-0.3.55 marshmallow-3.26.1 mypy-extensions-1.1.0 pydantic-settings-2.9.1 python-dotenv-1.1.0 typing-inspect-0.9.0\n",
+            "Collecting faiss-cpu\n",
+            "  Downloading faiss_cpu-1.10.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (4.4 kB)\n",
+            "Requirement already satisfied: numpy<3.0,>=1.25.0 in /usr/local/lib/python3.11/dist-packages (from faiss-cpu) (2.0.2)\n",
+            "Requirement already satisfied: packaging in /usr/local/lib/python3.11/dist-packages (from faiss-cpu) (24.2)\n",
+            "Downloading faiss_cpu-1.10.0-cp311-cp311-manylinux_2_28_x86_64.whl (30.7 MB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m30.7/30.7 MB\u001b[0m \u001b[31m46.8 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hInstalling collected packages: faiss-cpu\n",
+            "Successfully installed faiss-cpu-1.10.0\n",
+            "Collecting pypdf\n",
+            "  Downloading pypdf-5.4.0-py3-none-any.whl.metadata (7.3 kB)\n",
+            "Downloading pypdf-5.4.0-py3-none-any.whl (302 kB)\n",
+            "\u001b[2K   \u001b[90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\u001b[0m \u001b[32m302.3/302.3 kB\u001b[0m \u001b[31m4.9 MB/s\u001b[0m eta \u001b[36m0:00:00\u001b[0m\n",
+            "\u001b[?25hInstalling collected packages: pypdf\n",
+            "Successfully installed pypdf-5.4.0\n",
+            "Collecting python-multipart\n",
+            "  Downloading python_multipart-0.0.20-py3-none-any.whl.metadata (1.8 kB)\n",
+            "Downloading python_multipart-0.0.20-py3-none-any.whl (24 kB)\n",
+            "Installing collected packages: python-multipart\n",
+            "Successfully installed python-multipart-0.0.20\n",
+            "Requirement already satisfied: jinja2 in /usr/local/lib/python3.11/dist-packages (3.1.6)\n",
+            "Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.11/dist-packages (from jinja2) (3.0.2)\n",
+            "Requirement already satisfied: faiss-cpu in /usr/local/lib/python3.11/dist-packages (1.10.0)\n",
+            "Requirement already satisfied: numpy<3.0,>=1.25.0 in /usr/local/lib/python3.11/dist-packages (from faiss-cpu) (2.0.2)\n",
+            "Requirement already satisfied: packaging in /usr/local/lib/python3.11/dist-packages (from faiss-cpu) (24.2)\n",
+            "Requirement already satisfied: pypdf in /usr/local/lib/python3.11/dist-packages (5.4.0)\n",
+            "Requirement already satisfied: python-multipart in /usr/local/lib/python3.11/dist-packages (0.0.20)\n",
+            "Requirement already satisfied: jinja2 in /usr/local/lib/python3.11/dist-packages (3.1.6)\n",
+            "Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.11/dist-packages (from jinja2) (3.0.2)\n"
+          ]
+        }
+      ]
+    }
+  ]
+}
